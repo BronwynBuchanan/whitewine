@@ -33,8 +33,8 @@ The goal of this project is to identify which chemical variables are the best pr
 - EDA
 - Logistic Regression Modeling
 - Multinomial Logistic Regression Modelling 
+- Stepwise Regression
 - Decision Trees
-- Random Forest
 
 ### 5. Files included
 - Data set: winequality-white.csv

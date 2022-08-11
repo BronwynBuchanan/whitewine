@@ -1,0 +1,933 @@
+---
+title: "White_Wine_Data"
+author: "Bronwyn Buchanan"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+```
+<style type="text/css">
+
+body{ /* Normal */
+        font-size: 12px;
+    }
+td {  /* Table */
+    font-size: 8px;
+    }
+    h1.title {
+      font-size: 38px;
+      color: DarkRed;
+  }
+  h1 { /* Header 1 */
+      font-size: 28px;
+      color: DarkBlue;
+  }
+  h2 { /* Header 2 */
+       font-size: 22px;
+    color: DarkBlue;
+  }
+  
+  code.r{ /* Code block */
+        font-size: 12px;
+  }
+  pre { /* Code block - determines code spacing between lines */
+  font-size: 14px;
+  }
+  </style>
+  
+  
+
+```{r}
+install.packages("Rtools")
+install.packages("ggplot2") #for data visualization and plots
+install.packages("gridExtra") #to view plots side by side
+install.packages ("LaplacesDemon") #to determine if data is multimodal 
+install.packages("multimode") #to determine the location of multiple modes 
+install.packages("corrplot") #to build correlation matrices
+install.packages("car") #to calculate the variance inflation factor
+install.packages("ggfortify") #for autoplot function
+install.packages("lmtest") #to perform the Breusch-Pagan test
+install.packages("olsrr") #to check the normality assumption of lm residuals
+install.packages("caTools") #to create sample sets
+install.packages("MASS") #to run logistic regression model, Brant test
+install.packages("nnet") #to create multinomial logistic regression model
+```
+
+#Outline: 
+1. Introduction
+2. Data Preparation
+2.1 Data Cleaning
+2.2 Data Transformation
+3. Exploratory Data Analysis - EDA
+3.1 Univariate Analysis
+3.2 Bivariate Analysis
+3.2.1 Correlation Matrix
+3.2.2 Assumptions of Linear Regression Test
+3.2.3. Determining Variables of Interest
+3.3 Multivariate Analysis
+4. Modeling 
+4.1 Prepare the dataset 
+4.2 Ordinal Logistic Regression w/ Density
+4.2.1 Multinomial Logistic Regression w/ Density 
+4.2.2 Ordinal Logistic Regression w/o Density
+4.2.3 Multinomial Logistic Regression w/o Density 
+4.3 Stepwise Logistic Regression
+5. Evaluation 
+
+#1. Introduction
+
+#2. Data Preparation
+
+
+#2.1 Data Cleaning
+- Dataset Creation
+```{r}
+white_wine_data <- read.csv("whitewine.csv") 
+```
+- Data Overview
+```{r}
+str(white_wine_data)
+```
+- Check Missing Values
+```{r}
+white_wine_data [!complete.cases(white_wine_data),]
+```
+
+#3. Exploratory Data Analysis - EDA
+
+## 3.1 Univariate Analysis
+### Overall Quality 
+```{r}
+#Quality Histogram
+qh <- hist(white_wine_data$quality, 
+main="Histogram of White Wine Quality",
+xlab="Quality Score",
+col="bisque2",
+freq=FALSE
+)
+qh
+
+#Quality Quantile-Quantile Plot
+library(ggplot2)
+qq <- ggplot(white_wine_data, aes(sample=quality))+ 
+stat_qq (color="bisque2")+
+stat_qq_line(color="orange4")+ 
+labs(title="Quantile Quantile Plot for quality", x="Theoretical Quantiles", y="Ordered Values")+
+theme(plot.title=element_text(hjust=0.5))  
+qq
+
+#Key Summary of Quality Variable 
+# Quality Distribution appears to be unimodal normal distribution. The majority of wines in the dataset have an average quality value of 6. Given that our dependent variable is normally distributed no transformations need to be applied.
+```
+
+##Plotting the remaining variables of interest
+#Acidity Variables (Fixed Acidity, Volatile Acidity, Citric Acidity, pH)
+```{r}
+#Fixed Acidity Histogram
+library(gridExtra)
+h2 <- qplot(volatile.acidity, data = white_wine_data, main="Volatile Acidity Histogram",ylab="Count")  
+revisedh2 <- ggplot(aes(x = volatile.acidity), data= white_wine_data)+
+geom_histogram(binwidth = 0.01, color="black", fill="bisque2")+
+geom_vline(aes(xintercept=mean(volatile.acidity)), colour="orange4",linetype="longdash",size=1)+
+scale_x_log10(breaks = seq(0, 1.1, 0.1))+
+ggtitle("Volatile Acidity Histogram")+
+xlab("AcOH Concentration [g/L]")+
+ylab("Count")+
+theme(plot.title=element_text(hjust=0.5))
+grid.arrange(h2, revisedh2)
+
+#Key Summary of Fixed Acidity Variable
+#The basic histogram demonstrates there are few values <3 and a long tail after 10, which can be viewed as outliers. 
+#Adjusting the binwidth and x range tells us that the fixed acidity has a normal distribution. The majority of the fixed acidities fall between 6.3 and 7.3.
+
+#Volatile Acidity Histogram 
+library(gridExtra)
+h2 <- qplot(volatile.acidity, data = white_wine_data, main="Volatile Acidity Histogram",ylab="Count")  
+revisedh2 <- ggplot(aes(x = volatile.acidity), data= white_wine_data)+
+geom_histogram(binwidth = 0.01, color="black", fill="bisque2")+
+geom_vline(aes(xintercept=mean(volatile.acidity)), colour="orange4",linetype="longdash",size=1)+
+scale_x_log10(breaks = seq(0, 1.1, 0.1))+
+ggtitle("Volatile Acidity Histogram")+
+xlab("AcOH Concentration [g/L]")+
+ylab("Count")+
+theme(plot.title=element_text(hjust=0.5))
+grid.arrange(h2, revisedh2)
+
+
+#Key Summary of Volatile Acidity Variable
+#Adjusting the binwidth and transforming the longtail allows us to more clearly determine that the distribution of 
+#volatile acidity is normally distributed and approximately peaks at 0.27g/L as this is the mean. 
+#However it is positively skewed.
+
+#Citric Acidity Histogram 
+h3 <- qplot(citric.acid, data = white_wine_data, main="Citric Acidity Histogram",ylab="Count")  
+revisedh3 <- ggplot(aes(x = citric.acid), data= white_wine_data)+
+geom_histogram(binwidth = 0.01, color="black", fill="bisque2")+
+geom_vline(aes(xintercept=mean(citric.acid)), colour="orange4",linetype="longdash",size=1)+
+scale_x_continuous(breaks = seq(0, 1.7, 0.1), limits = c(0,0.75))+
+ggtitle("Citric Acidity Histogram")+
+xlab("Concentration [g/L]")+
+ylab("Count")+
+theme(plot.title=element_text(hjust=0.5))
+grid.arrange(h3, revisedh3)
+
+#Key Summary of Citric Acidity Variable
+#The citric acid variable has a normal distribution with a mean of 0.33. However,  
+#It does contain some outliers above 0.9. As well it does contain a spike at 0.49g/L. 
+
+#pH Histogram 
+h4 <- qplot(pH, data = white_wine_data, main="pH Histogram",ylab="Count")  
+revisedh4 <- ggplot(aes(x = pH), data= white_wine_data)+
+geom_histogram(binwidth = 0.02, color="black", fill="bisque2")+
+geom_vline(aes(xintercept=mean(pH)), colour="orange4",linetype="longdash",size=1)+
+scale_x_continuous(breaks = seq(3, 3.9, 0.1), limit = c(2.9,3.5))+
+ggtitle("pH Histogram")+
+xlab("pH Level")+
+ylab("Count")+
+theme(plot.title=element_text(hjust=0.5))
+grid.arrange(h4, revisedh4)
+
+#Key Summary of pH Variable 
+#pH has a normal distribution with a mean of 3.18. 
+#It also has a smaller range than the other variables.
+```
+
+#Gas Variables (Sulphates, Free Sulfur Dioxide, Total Sulfur Dioxide)
+```{r}
+#Sulphates Histogram 
+h5 <- qplot(sulphates, data = white_wine_data, main="Sulphates Histogram",ylab="Count")  
+revisedh5 <- ggplot(aes(x = sulphates), data= white_wine_data)+
+geom_histogram(binwidth = 0.01, color="black", fill="bisque2")+
+geom_vline(aes(xintercept=mean(sulphates)), colour="orange4",linetype="longdash",size=1)+
+scale_x_continuous(breaks = seq(0.2, 1.1, 0.1))+
+ggtitle("Sulphates Histogram")+
+xlab("Sulphates Concentration[g/L]")+
+ylab("Count")+
+theme(plot.title=element_text(hjust=0.5))
+grid.arrange(h5, revisedh5)
+
+#Key Summary of Sulphates Variable 
+#Sulphates has a slightly positively skewed normal distribution with a mean of approx 0.49.
+
+#Free Sulfur Dioxide Histogram 
+h6 <- qplot(free.sulfur.dioxide, data = white_wine_data, main="Free Sulfur Dioxide Histogram",ylab="Count")  
+revisedh6 <- ggplot(aes(x = free.sulfur.dioxide), data= white_wine_data)+
+geom_histogram(binwidth = 1, color="black", fill="bisque2")+
+geom_vline(aes(xintercept=mean(free.sulfur.dioxide)), colour="orange4",linetype="longdash",size=1)+
+scale_x_continuous(breaks = seq(0, 100, 5), limits=c(0, 80))+
+ggtitle("Free Sulfur Dioxide Histogram")+
+xlab("SO2 Concentration[mg/L]")+
+ylab("Count")+
+theme(plot.title=element_text(hjust=0.5))
+grid.arrange(h6, revisedh6)
+
+#Key Summary of Free Sulfur Dioxide Variable 
+#Free sulfur dioxide has a normal distribution with a mean of approx 35 and some extreme outliers over 90.   
+#It has a wide range with values ranging from 2 to 289 mg/L. 
+
+#Total Sulfur Dioxide Histogram 
+h7 <- qplot(total.sulfur.dioxide, data = white_wine_data, main="Total Sulfur Dioxide Histogram",ylab="Count")  
+revisedh7 <- ggplot(aes(x = total.sulfur.dioxide), data= white_wine_data)+
+geom_histogram(binwidth = 5, color="black", fill="bisque2")+
+geom_vline(aes(xintercept=mean(total.sulfur.dioxide)), colour="orange4",linetype="longdash",size=1)+
+scale_x_continuous(breaks = seq(10, 250, 10), limits=c(10, 250))+
+ggtitle("Total Sulfur Dioxide Histogram")+
+xlab("SO2 Concentration[mg/L]")+
+ylab("Count")+
+theme(plot.title=element_text(hjust=0.5))
+grid.arrange(h7, revisedh7)
+
+#Key Summary of Total Sulfur Dioxide Variable 
+#Total Sulfur Dioxide has a normal distribution with a mean of approx 138.4.   
+#It has a wide range of value from 9 to 440mg/L.
+```
+
+#Remaining Variables (Residual Sugar Acidity, Chlorides, Alcohol, Density)
+```{r}
+h8 <- qplot(residual.sugar, data = white_wine_data, main="Residual Sugar Histogram",ylab="Count")  
+revisedh8 <- ggplot(aes(x = residual.sugar), data= white_wine_data)+
+geom_histogram(binwidth = 0.02, color="black", fill="bisque2")+
+geom_vline(aes(xintercept=mean(residual.sugar)), colour="orange4",linetype="longdash",size=1)+
+scale_x_log10(breaks = c(0.01, 0.015, 0.02, 0.03, 0.05, 0.1, 0.2)) +
+ggtitle("Residual Sugar Histogram")+
+xlab("Sugar Concentration[g/L]")+
+ylab("Count")+
+theme(plot.title=element_text(hjust=0.5))
+grid.arrange(h8, revisedh8)
+
+#Determine modality of Residual Sugar
+library(LaplacesDemon)
+library(multimode)
+is.unimodal(white_wine_data$residual.sugar)
+is.bimodal(white_wine_data$residual.sugar)
+is.trimodal(white_wine_data$residual.sugar)
+
+#Estimate and Plot Means of Residual Sugar Trimodality, Retreive Exact Trimodal Residual Means
+sugarmodes <- locmodes(white_wine_data$residual.sugar,mod0=3,display=TRUE)
+plot(sugarmodes, xlab="Sugar Concentration [g/L]", main="Residual Sugar Density Function",addLegend=TRUE)
+Modes(white_wine_data$residual.sugar)$modes
+
+#Key Summary of Residual Sugar Variable  
+#In transforming the long tail data it appears as though the transformed residual sugar distribution is trimodal.
+#This makes sense however, as wine producers would produce wine with varying degrees of sweetness in order to capture different consumer preferences. 
+#Thus, we will keep this variable as is.
+
+#Chlorides Histogram 
+h9 <- qplot(chlorides, data = white_wine_data, main="Chlorides Histogram",ylab="Count")  
+revisedh9 <- ggplot(aes(x = chlorides), data= white_wine_data)+
+geom_histogram(binwidth = 0.001, color="black", fill="bisque2")+
+geom_vline(aes(xintercept=mean(chlorides)), colour="orange4",linetype="longdash",size=1)+
+scale_x_continuous(breaks = seq(0, 0.1, 0.01), limits=c(0, 0.1))+
+ggtitle("Chlorides Histogram")+
+xlab("Chloride Concentration[g/L]")+
+ylab("Count")+
+theme(plot.title=element_text(hjust=0.5))
+grid.arrange(h9, revisedh9)
+
+#Determine modality of Chlorides
+library(LaplacesDemon)
+library(multimode)
+is.unimodal(white_wine_data$chlorides)
+is.bimodal(white_wine_data$chlorides)
+is.trimodal(white_wine_data$chlorides)
+
+#Estimate and Plot Means of Chloride Bimodality, Retreive Exact Bimodal Chloride Means
+chloridemodes <- locmodes(white_wine_data$chlorides,mod0=2,display=TRUE)
+plot(chloridemodes, xlab="Chloride Concentration[g/L]", main="Chloride Density Function")
+Modes(white_wine_data$chlorides)$modes
+
+#Key Summary of Chlorides Variable 
+#Chlorides has a bimodal distribution with a mean of approx 0.046g/L.   
+#Fifty percent of chlorides fall between 0.036 and 0.05.  
+
+#Alcohol Histogram 
+h10 <- qplot(alcohol, data = white_wine_data, main="Alcohol Histogram",ylab="Count")  
+revisedh10 <- ggplot(aes(x = alcohol), data= white_wine_data)+
+geom_histogram(binwidth = 0.05, color="black", fill="bisque2")+
+geom_vline(aes(xintercept=mean(alcohol)), colour="orange4",linetype="longdash",size=1)+
+scale_x_continuous(breaks = seq(8.5, 13, 0.5), limits=c(8.5, 13))+
+ggtitle("Alcohol Histogram")+
+xlab("Alcohol Content[vol%]")+
+ylab("Count")+
+theme(plot.title=element_text(hjust=0.5))
+grid.arrange(h10, revisedh10)
+
+#Key Summary of Alcohol Variable 
+#Alcohol has a right skewed normal distribution with a mean of approx 10.51.   
+#Our white wine dataset does not have a very strong alcohol content level, as the 
+#majority of values fall between 9 to 13%. 
+
+#Density Histogram 
+h11 <- qplot(density, data = white_wine_data, main="Density Histogram",ylab="Count")  
+revisedh11 <- ggplot(aes(x = density), data= white_wine_data)+
+geom_histogram(binwidth = 0.0001, color="black", fill="bisque2")+
+geom_vline(aes(xintercept=mean(density)), colour="orange4",linetype="longdash",size=1)+
+scale_x_log10(breaks = seq(0.985, 1.005, 0.002), limits=c(0.985,1.005))+
+ggtitle("Density Histogram")+
+xlab("Density Content[g/cm3]")+
+ylab("Count")+
+theme(plot.title=element_text(hjust=0.5))
+grid.arrange(h11, revisedh11)
+
+#Key Summary of Density Variable 
+#Density has a normal distribution with a mean of approx 0.994.   
+#It has a small range from 0.99 to 1.04g/cm. There values over 1.01 can be considered outliers.
+```
+
+#Univariate Analysis Takeaways
+#All variables can be described as having a normal distribution with some outliers.
+#Most wines have a quality rating of 6. We have very few poor wines (low rating) or outstanding wines (high rating). Notably, no wine received a perfect 10 quality score. 
+#Acidity is measured by its fixed and volatile components. White wine is highly acetic with pH level ranging from 2.7 to 3.8. 
+#Free Sulfur dioxide concentration varies widely, however the smell becomes noticeable at any level above 50mg/L. 
+#Log transformations were performed on the residual sugar,chlorides, and density variables as their distributions were very skewed, and the transformations allowed for a better data visualization to definitively determine their distributions as normal.
+#Residual Sugar has a large range which is deliberately done to cater to a wide variety of consumer preferences. Wines above 45g/L are considered vry sweet. 
+#Density had the least variation of all variables. 
+#Chlorides and Residual Sugar have bimodal and trimodal distributions. We can ignore these for now as, these only will be of concern if the residuals of these two variables are also bimodal and trimodal.  
+
+## 3.2 Bivariate Analysis
+##3.2.1 Correlation Matrix 
+#First, we will check the condition of collinearity by creating a correlation matrix. 
+```{r}
+#Build a correlation matrix
+library(corrplot)
+white_wine_data_cor = cor(white_wine_data)
+corrplot(white_wine_data_cor, method="color",
+addCoef.col = "black", 
+tl.col="black", tl.srt=45, 
+diag=FALSE) 
+
+#We see the condition of collinearity is violated as the magnitude of the correlation coefficient between any two independent variables should be less than .80 in a Pearson bivariate correlation. 
+#The correlation coefficient between residual sugar and density is 0.84, therefore violating this assumption. 
+#More on the results of this correlation matrix to follow, once the other assumptions of linear regression are tested.
+
+#Check for Multicollinearity 
+MLM <- (lm(quality ~ fixed.acidity + volatile.acidity + citric.acid + residual.sugar + chlorides + free.sulfur.dioxide + total.sulfur.dioxide + density + pH + sulphates + alcohol, data= white_wine_data))
+car::vif(MLM) 
+#Through a VIF analysis we can see that the multicollinearity assumption is violated, as we see a VIF score above 10 for both density and residual sugar. This can be attributed to the collinearity problem raised in our correlation matrix between residual sugar and density.
+#Let's remove one of the two variables, density, and compare the revised VIF scores. 
+revisedMLM <- (lm(quality ~ fixed.acidity + volatile.acidity + citric.acid + residual.sugar + chlorides + free.sulfur.dioxide + total.sulfur.dioxide + pH + sulphates + alcohol, data= white_wine_data))
+car::vif(revisedMLM)
+
+#Removing the variable density alleviates the effect of multicollinearity, however, the decision as to whether or not we will keep denisty as a feature in our model depends on its importance (correlation) as a predictor for our dependent variable, quality. 
+#We will create a new dataset without density should we choose to drop the variable below. 
+new_white_wine_data <- white_wine_data
+#Drop multicollinearity affected variables 
+new_white_wine_data$density <- NULL
+str(new_white_wine_data)
+
+```
+#3.2.2 Tests of Linear Regression Assumptions
+#Check the remaining assumptions of multiple linear regression are met (Linearity, Normality, and Homoscedasticity)
+
+```{r}
+#Create Linear Models 
+lm1 <- (lm(quality ~ fixed.acidity, data= white_wine_data))
+lm2 <- (lm(quality ~ volatile.acidity, data= white_wine_data))
+lm3 <- (lm(quality ~ citric.acid, data= white_wine_data)) 
+lm4 <- (lm(quality ~ pH, data= white_wine_data))
+lm5 <- (lm(quality ~ sulphates, data= white_wine_data)) 
+lm6 <- (lm (quality ~ free.sulfur.dioxide, data= white_wine_data))
+lm7 <- (lm(quality ~ total.sulfur.dioxide, data= white_wine_data))
+lm8 <- (lm(quality ~ residual.sugar, data= white_wine_data))
+lm9 <- (lm(quality ~ chlorides, data= white_wine_data)) 
+lm10 <- (lm(quality ~ alcohol, data= white_wine_data)) 
+lm11 <- (lm(quality ~ density, data= white_wine_data)) 
+```
+
+#Checking that Linearity is met through Residuals vs. Fitted Plot  
+#Checking that Homoscedasticity is met through the Scale-Location Plot, Residual vs. Fitted Plot & Breusch-Pagan test.
+#Checking that Normality is met through Residual Histogram, Normal Quantile Quantile Plot & Normality Tests.
+
+#Acidity Variables (Fixed Acidity, Volatile Acidity, Citric Acidity, pH)
+```{r}
+library(ggfortify) 
+library(lmtest)
+library(olsrr)
+autoplot(lm1) + 
+labs(title = "Fixed Acidity vs Quality")
+bptest(lm1)
+residhist1 <- ols_plot_resid_hist(lm1)+
+  labs(title = "Fixed Acidity and Quality Residual Histogram")
+ols_test_normality(lm1)
+#Fixed-Acidity ~ Quality Regression Assumption Summary: 
+  #Linearity: The Residual vs. Fitted plot suggests that the variables have a linear relationships as there is no clear curvature of the plot. 
+  #Homoscedasticity: Scale-location test suggests data is homoscedastic as our values do increase to the right. BP test confirms data is homoscedastic as P-value > 0.05 for BP test.
+  #Normality: The Histogram shows that most of the residuals fall around zero. Moverover, the number of observations in the tails is low. The histogram suggests a normal distribution. The Kolmogorov-Smirnov test suggests non-normality as the P-value is < 0.05. 
+
+autoplot(lm2)+ 
+labs(title = "Volatile Acidity vs Quality")
+bptest(lm2)
+residhist2 <- ols_plot_resid_hist(lm2)+
+  labs(title = "Volatile Acidity and Quality Residual Histogram")
+ols_test_normality(lm2)
+#Volatile-Acidity ~ Quality Regression Assumption Summary: 
+  #Linearity: The Residual vs. Fitted plot suggests that the variables have a linear relationships as there is no clear curvature of the plot.
+  #Homoscedasticity: Scale-location test suggests data is heteroscedastic as our values do not increase to the right. BP test confirms data is heteroscedastic as P-value < 0.05 for BP test.
+  #Normality: The Histogram shows that most of the residuals fall around zero. Moverover, the number of observations in the tails is low. The histogram suggests a normal distribution. The Kolmogorov-Smirnov test suggests non-normality as the P-value is < 0.05.
+
+autoplot(lm3) + 
+labs(title = "Citric Acid vs Quality")
+bptest(lm3)
+residhist3 <- ols_plot_resid_hist(lm3)+
+  labs(title = "Citric Acid and Quality Residual Histogram")
+ols_test_normality(lm3)
+#Citric-Acid ~ Quality Regression Assumption Summary: 
+  #Linearity: The Residual vs. Fitted plot suggests that the variables have a linear relationships as there is no clear curvature of the plot.
+  #Homoscedasticity: Scale-location test suggests data is homoscedastic as our values do increase to the right. BP test confirms data is heteroscedastic as P-value < 0.05 for BP test.
+  #Normality: The Histogram shows that most of the residuals fall around zero. Moverover, the number of observations in the tails is low. The histogram suggests a normal distribution. The Kolmogorov-Smirnov test suggests non-normality as the P-value is < 0.05.
+
+autoplot(lm4)+
+labs(title = "pH vs Quality")
+bptest(lm4)
+residhist4 <- ols_plot_resid_hist(lm4) +
+  labs(title = "pH and Quality Residual Histogram") 
+ols_test_normality(lm4)
+#pH ~ Quality Regression Assumption Summary:
+  #Linearity: The Residual vs. Fitted plot suggests that the variables have a linear relationships as there is no clear curvature of the plot. 
+  #Homoscedasticity: Scale-location test suggests data is homoscedastic as our values do increase to the right. BP test confirms data is homoscedastic as P-value > 0.05 for BP test. 
+  #Normality: The Histogram shows that most of the residuals fall around zero. Moverover, the number of observations in the tails is low. The histogram suggests a normal distribution. The Kolmogorov-Smirnov test suggests non-normality as the P-value is < 0.05.
+```
+
+#Gas Variables (Sulphates, Free Sulfur Dioxide, Total Sulfur Dioxide)
+```{r}
+autoplot(lm5)+
+labs(title = "Sulphates vs Quality")
+bptest(lm5) 
+residhist5 <- ols_plot_resid_hist(lm5) +
+  labs(title = "Sulphates and Quality Residual Histogram")
+ols_test_normality(lm5)
+#Sulphates ~ Quality Regression Assumption Summary: 
+  #Linearity: The Residual vs. Fitted plot suggests that the variables have a linear relationships as there is no clear curvature of the plot.
+  #Homoscedasticity: Scale-location test suggests data is homoscedastic as our values do increase to the right. BP test confirms data is homoscedastic as P-value > 0.05 for BP test.
+  #Normality: The Histogram shows that most of the residuals fall around zero. Moverover, the number of observations in the tails is low. The histogram suggests a normal distribution. The Kolmogorov-Smirnov test suggests non-normality as the P-value is < 0.05.
+
+autoplot(lm6)+
+labs(title = "Free Sulfur Dioxide vs Quality")
+bptest(lm6) 
+residhist6 <-ols_plot_resid_hist(lm6) +
+  labs(title = "Free Sulfur Dioxide and Quality Residual Histogram")
+ols_test_normality(lm6)
+#Free Sulphur Dioxide ~ Quality Regression Assumption Summary: 
+  #Linearity: The Residual vs. Fitted plot suggests that the variables have a linear relationships as there is no clear curvature of the plot.
+  #Homoscedasticity: Scale-location test suggests data is heteroscedastic as our values do not increase to the right. BP test confirms data is homoscedastic as P-value > 0.05 for BP test.
+  #Normality: The Histogram shows that most of the residuals fall around zero. Moverover, the number of observations in the tails is low. The histogram suggests a normal distribution. The Kolmogorov-Smirnov test suggests non-normality as the P-value is < 0.05.
+
+autoplot(lm7)+
+labs(title = "Total Sulfur Dioxide vs Quality")
+bptest(lm7) 
+residhist7 <-ols_plot_resid_hist(lm7) + 
+  labs(title = "Total Sulfur Dioxide and Quality Residual Histogram")
+ols_test_normality(lm7)
+#Total Sulfur Dioxide ~ Quality Regression Assumption Summary: 
+  #Linearity: The Residual vs. Fitted plot suggests that the variables have a linear relationships as there is no clear curvature of the plot.
+  #Homoscedasticity: Scale-location test suggests data is homoscedastic as our values do increase to the right. BP test confirms data is heteroscedastic as P-value < 0.05 for BP test.
+  #Normality: The Histogram shows that most of the residuals fall around zero. Moverover, the number of observations in the tails is low. The histogram suggests a normal distribution. The Kolmogorov-Smirnov test suggests non-normality as the P-value is < 0.05.
+```
+#Remaining Variables (Residual Sugar Acidity, Chlorides, Alcohol, Density)
+```{r}
+autoplot(lm8)+
+labs(title = "Residual Sugar vs Quality")
+bptest(lm8) 
+residhist8 <-ols_plot_resid_hist(lm8)  +
+  labs(title = "Residual Sugar and Quality Residual Histogram")
+ols_test_normality(lm8)
+#Residual Sugar ~ Quality Regression Assumption Summary: 
+  #Linearity: The Residual vs. Fitted plot suggests that the variables have a linear relationships as there is no clear curvature of the plot.
+  #Homoscedasticity: Scale-location test suggests data is homoscedastic as our values do increase to the right. BP test confirms data is heteroscedastic as P-value < 0.05 for BP test.
+  #Normality: The Histogram shows that most of the residuals fall around zero. Moverover, the number of observations in the tails is low. The histogram suggests a normal distribution. The Kolmogorov-Smirnov test suggests non-normality as the P-value is < 0.05.
+
+autoplot(lm9)+
+labs(title = "Chlorides vs Quality")
+bptest(lm9)
+residhist9 <- ols_plot_resid_hist(lm9) +
+  labs(title = "Chlorides and Quality Residual Histogram")
+ols_test_normality(lm9)
+#Chlorides ~ Quality Regression Assumption Summary: 
+  #Linearity: The Residual vs. Fitted plot suggests that the variables have a linear relationships as there is no clear curvature of the plot.
+  #Homoscedasticity: Scale-location test suggests data is homoscedastic as our values do increase to the right. BP test confirms data is homoscedastic as P-value > 0.05 for BP test.
+  #Normality: The Histogram shows that most of the residuals fall around zero. Moverover, the number of observations in the tails is low. The histogram suggests a normal distribution. The Kolmogorov-Smirnov test suggests non-normality as the P-value is < 0.05.
+
+autoplot(lm10)+
+labs(title = "Alcohol vs Quality")
+bptest(lm10) 
+residhist10 <-ols_plot_resid_hist(lm10)  + 
+  labs(title = "Alcohol and Quality Residual Histogram")
+ols_test_normality(lm10)
+#Alcohol ~ Quality Regression Assumption Summary: 
+  #Linearity: The Residual vs. Fitted plot suggests that the variables have a linear relationships as there is no clear curvature of the plot.
+  #Homoscedasticity: Scale-location test suggests data is heteroscedastic as our data does not increase to the right. BP test confirms data is heteroscedastic as P-value < 0.05 for BP test. 
+  #Normality: The Histogram shows that most of the residuals fall around zero. Moverover, the number of observations in the tails is low. The histogram suggests a normal distribution. The Kolmogorov-Smirnov test suggests non-normality as the P-value is < 0.05.
+
+autoplot(lm11)+
+labs(title = "Density vs Quality")
+bptest(lm11)
+residhist11 <-ols_plot_resid_hist(lm11) + 
+  labs(title = "Density and Quality Residual Histogram")
+ols_test_normality(lm11) 
+#Density ~ Quality Regression Assumption Summary: 
+  #Linearity: The Residual vs. Fitted plot suggests that the variables have a linear relationships as there is no clear curvature of the plot.
+  #Homoscedasticity: Scale-location test suggests data is homoscedastic as our values do increase to the right. BP test confirms data is homoscedastic as P-value > 0.05 for BP test. 
+  #Normality: The Histogram shows that most of the residuals fall around zero. Moverover, the number of observations in the tails is low. The histogram suggests a normal distribution. The Kolmogorov-Smirnov test suggests non-normality as the P-value is < 0.05.
+```
+#Multiple Linear Regression Assumptions Summary 
+#Conclusion is that our model is not appropriate for multiple linear regression as it violates the assumptions of linear regression as outlined below. 
+#1.) Linearity: The parallel lines seen for all 11 dependent variables is a consquence of the fact that our dependent variable is comprised of discrete integer values, namely a 10 point ranking system. 
+#However, there is a debate amongst whether a scaled dependent variable can be modeled as a continuous numeric variable. Regardless of the validity of a residual vs. fitted plot for a discrete dependent variable, all of our residual vs. linear plots confirmed a linear relationship exists between quality and each independent variable.
+#2.) Homoscedasticity - The residual vs. fitted plots for all of the independent variables looks very different to a typical residual vs. fitted graph. 
+# The reason for this is because our dependent variable wine is not a continuous variable. #It is a scale ranging from one to ten that can only consist of whole numbers. Thus, it forces the fitted values in our model to be approximately whole numbers, creating the bands we see. 
+#While we could use the linear vs. fitted test to gauge homoscedasticity, it is more easily determined through scale-location and Breusch-Pagan test. The conclusion after analyzing both the BP and scale-location plots are that only some of our variables pass the homoscedastic criteria. 
+#Six independent variables are homoscedastic in relation to their linear model with the dependent variable, quality. Whereas, five variables are heteroscedastic. Thus, linear regression is not an appropriate analysis technique, unless some transformations are done. 
+#3.) Normality - Every independent variable residual plot indicated that it was normally distributed. However, all Kolmogorov-Smirnov tests suggested non-normality. Because KS tests have been shown to be unreliable past samples of 1,000 we will declare that all residuals do in fact have normal residual distributions, as proven by their normal quantile-quantile plots and residual histograms. 
+
+
+#3.2.3 Determining our variables of interest 
+#Independent variables that have interesting relations with our dependent variable quality. 
+#From our previous correlation matrix, we have identified two independent variables that have an interesting relationship with our dependent variable, quality. 
+#Alcohol has a moderate positive correlation with quality, whereas density has a moderate negative correlation with quality. 
+#The below boxplots indicates that wines with higher alcohol content tend to have higher quality, and inversely wines with higher sugar content tend to have lower qualities.
+```{r}
+b1 <- ggplot(white_wine_data, aes(factor(quality), alcohol, fill=factor(quality))) + 
+  geom_boxplot() +
+  labs(x = "Quality", y = "Alcohol", title = "Boxplot of Quality vs. Alcohol") + 
+  theme(legend.position = 'none', plot.title = element_text(size = 9, hjust=0.5))
+b1
+ 
+
+b2 <- ggplot(white_wine_data, aes(factor(quality), density, fill=factor(quality))) + 
+  geom_boxplot() +
+  labs(x = "Quality", y = "Density", title = "Boxplot of Quality vs. Density") + 
+  theme(legend.position = 'none', plot.title = element_text(size = 9, hjust=0.5))
+b2
+library(gridExtra)
+grid.arrange(b1,b2, ncol=2)
+
+#The remaining boxplots provide a look at how the rest of our independent variables interact with our variable of interest quality. 
+#However they are not of particular interest to us as their correlation are weak. 
+
+#Quality & Fixed Acidity
+b3 <- ggplot(white_wine_data, aes(factor(quality), fixed.acidity, fill=factor(quality))) + 
+  geom_boxplot() +
+  labs(x = "Quality", y = "Fixed Acidity", title = "Boxplot of Quality vs. Fixed Acidity") + 
+  theme(legend.position = 'none', plot.title = element_text(size = 9, hjust=0.5))
+b3
+#Better quality wines seem to have smaller fixed acidities on average. 
+
+#Quality & Volatile Acidity 
+b4 <- ggplot(white_wine_data, aes(factor(quality), volatile.acidity, fill=factor(quality))) + 
+  geom_boxplot() +
+  labs(x = "Quality", y = "Volatile Acidity", title = "Boxplot of Quality vs. Volatile Acidity") + 
+  theme(legend.position = 'none', plot.title = element_text(size = 9, hjust=0.5))
+b4
+#Better quality wines also seem to have smaller levels of volatile acidity, but this is inconclusive. 
+
+#Quality & Citric Acid
+b5 <- ggplot(white_wine_data, aes(factor(quality), citric.acid, fill=factor(quality))) + 
+  geom_boxplot() +
+  labs(x = "Quality", y = "Citric Acid", title = "Boxplot of Quality vs. Citric Acid") + 
+  theme(legend.position = 'none', plot.title = element_text(size = 9, hjust=0.5))
+b5
+#Nothing conclusive can be gathered, other than that there is little correlation between citric acid and quality. 
+
+#Quality & pH
+b6 <- ggplot(white_wine_data, aes(factor(quality), pH, fill=factor(quality))) + 
+  geom_boxplot() +
+  labs(x = "quality", y = "pH", title = "Boxplot of Quality vs. pH") + 
+  theme(legend.position = 'none', plot.title = element_text(size = 9, hjust=0.5))
+b6
+#Average to High Quality wines (5-9) show an increase in median pH with every additional quality score. 
+
+#Quality & Sulphates
+b7 <- ggplot(white_wine_data, aes(factor(quality), sulphates, fill=factor(quality))) + 
+  geom_boxplot() +
+  labs(x = "Quality", y = "Sulphates", title = "Boxplot of Quality vs. Sulphates") + 
+  theme(legend.position = 'none', plot.title = element_text(size = 9, hjust=0.5))
+b7
+
+#Quality & Free Sulfur Dioxide
+b8 <- ggplot(white_wine_data, aes(factor(quality), free.sulfur.dioxide, fill=factor(quality))) + 
+  geom_boxplot() +
+  labs(x = "Quality", y = "Free Sulfur Dioxide", title = "Boxplot of Quality vs. Free Sulfur Dioxide") + 
+  theme(legend.position = 'none', plot.title = element_text(size = 9, hjust=0.5))
+b8
+#Like citric acid, there is no clear relationship between free sulfur dioxide and quality.
+
+#Quality & Total Sulfur Dioxide
+b9 <- ggplot(white_wine_data, aes(factor(quality), total.sulfur.dioxide, fill=factor(quality))) + 
+  geom_boxplot() +
+  labs(x = "Quality", y = "Total Sulfur Dioxide", title = "Boxplot of Quality vs. Total Sulfur Dioxide") + 
+  theme(legend.position = 'none', plot.title = element_text(size = 9, hjust=0.5))
+b9
+#A minimal negative correlation is visible. 
+
+#Quality & Residual Sugar
+b10 <- ggplot(white_wine_data, aes(factor(quality), residual.sugar, fill=factor(quality))) + 
+  geom_boxplot() +
+  labs(x = "Quality", y = "Residual Sugar", title = "Boxplot of Quality vs. Residual Sugar") + 
+  theme(legend.position = 'none', plot.title = element_text(size = 9, hjust=0.5))
+b10
+
+#Quality & Chlorides
+b11 <- ggplot(white_wine_data, aes(factor(quality), chlorides, fill=factor(quality))) + 
+  geom_boxplot() +
+  labs(x = "Quality", y = "Chlorides", title = "Boxplot of Quality vs. Chlorides") + 
+  theme(legend.position = 'none', plot.title = element_text(size = 9, hjust=0.5))
+b11
+#Higher quality wines tend to have lower chloride concentrations but the effect is weak. There are a lot of outliers for mid-quality wines. 
+
+#Other interesting relationships from our Correlation Matrix between independent variables include: 
+#1.) Alcohol & Density ~ Strong Negative Correlation: 
+b12 <- ggplot(aes(x = density, y = alcohol), data = white_wine_data) +
+  geom_point(color = I('bisque2'), alpha = 0.5, size = 1, position = 'jitter') +
+  coord_cartesian(xlim = c(quantile(white_wine_data$density, .05),
+                           quantile(white_wine_data$density, .95))) +
+  geom_smooth(method = "lm", se = FALSE) +
+  ggtitle('Alcohol by Density')+
+  theme(plot.title=element_text(hjust=0.5))
+b12
+
+#2.) Residual Sugar & Density ~ Strong Positive Correlation: 
+b13 <- ggplot(aes(x = residual.sugar, y = density), data = white_wine_data) +
+  geom_point(color = I('bisque2'),alpha = 0.5, size = 1, position = 'jitter') +
+  coord_cartesian(xlim = c(0, quantile(white_wine_data$residual.sugar, .95))) +
+  geom_smooth(method = "lm", se = FALSE) +
+  ggtitle('Density by Residual Sugar') +
+  theme(plot.title=element_text(hjust=0.5))
+b13
+
+#Density, Residual Sugar and Alcohol: 
+#Density has an approximately linear relationship with residual sugar and with alcohol. As the quantity of sugar increases, the wine becomes more dense representing a strong positive correlation. 
+#Whereas the stronger the alcohol content of a drink is, the less dense it is which represents a strong negative correlation. This relationship is expected, as sugar has a higher density than water and thereby increases the density of the wine mixture while alcohol does the opposite. 
+
+
+#3.) Free Sulfur Dioxide & Total Sulfur Dioxide ~ Strong Positive Correlation: 
+#As the plot below indicates, there is an infliction point when free sulfur dioxide reaches 50mg/L. From our research, we know that when free sulfur dioxide surpasses 50mg/L, one can smell the odour of the sulfur in wine. 
+#Thus, the strong positive correlation holds true at 0.51 for wines with less than 50 mg/L of free sulfur dioxide, but reduces to 0.19 among wines with higher free sulfur dioxide. 
+b14 <- ggplot(aes(x=free.sulfur.dioxide, y=total.sulfur.dioxide), data=white_wine_data) + 
+      geom_jitter(alpha=0.5, size=0.75, colour="bisque2")+
+      coord_cartesian(xlim=c(0,100))+
+      geom_smooth(color="orange4")+
+      ggtitle('Total Sulfur Dioxide by Free Sulfur Dioxide') + 
+      theme(plot.title=element_text(hjust=0.5))
+b14
+
+
+#4.) Density & Total Sulfur Dioxide ~ Strong Positive Correlation: 
+#The plot below shoes that the higher the total sulfur dioxide content, the greater the density. 
+b15 <- ggplot(white_wine_data, aes(x=total.sulfur.dioxide, y=density)) +
+  geom_point(color="bisque2",size=0.7) + 
+  labs(title="Total Sulfur Dioxide vs. Density") +
+  geom_smooth(formula=y~x,method=lm, color="orange4") +
+  theme(plot.title=element_text(hjust=0.5))
+b15
+```
+#Bivariate Plot Summary Conclusion: 
+#The features worth additional exploration with respect to our dependent variable, quality are alcohol and density.
+#Other features worth additional exploration independent of its direct relationship to quality, are residual sugar, density, free total sulfur dioxide, total sulfur dioxide. 
+
+# Residual Sugar, Density & Quality 
+# Alcohol,Density & Quality 
+# Alcohol, Residual Sugar & Quality
+
+#3.3 Multivariate Analysis 
+#The bivariate plots indicated that the looking at the dynamic between residual sugar, density and alcohol and its relationship to quality would be of interest. 
+```{r}
+#Transform Variables so Appropriate Plots can be made
+white_wine_data$quality[white_wine_data$quality<5] <- 0
+white_wine_data$quality[white_wine_data$quality ==5] <- 1
+white_wine_data$quality[white_wine_data$quality>5] <- 2 
+#Convert quality variable into factor variable
+white_wine_data$quality <- as.factor(white_wine_data$quality) 
+
+#Residual Sugar vs. Density vs. Quality 
+m1 <- ggplot(data = white_wine_data,aes(x = residual.sugar, y = density, colour = quality ))+
+  geom_point(alpha =1/2)+
+  geom_smooth(method = "lm", se = F, size = .5)+
+  ggtitle('Residual Sugar + Density vs. Quality') + 
+  theme(plot.title=element_text(hjust=0.5)) + 
+  scale_color_brewer(type = 'div', palette =  'RdBu')+ theme_dark()+
+  coord_cartesian(xlim=c(0,22), ylim = c(0.985,1.0025))
+m1 
+#Low residual sugar and low density, which are visible on the lower left corner of the graph indicates a clustering of higher rated wines. 
+
+#Alcohol vs. Density vs. Quality 
+m2 <- ggplot(data = white_wine_data, aes(x = density, y = alcohol, colour = quality ))+
+  geom_point(alpha = 1/2)+
+  geom_smooth(method = "lm", se = F, size = .5)+
+  ggtitle('Alcohol + Density vs. Quality') + 
+  theme(plot.title=element_text(hjust=0.5)) + 
+  scale_color_brewer(type = 'div', palette =  'RdBu')+ theme_dark()+
+  coord_cartesian( xlim = c(0.985,1.0025), ylim = c(7,14))
+m2
+#From this plot we can identify a cluster where higher quality wines tend to have higher alcohol content and lower densities, while average wines tend to have lower alcohol and higher densities.
+
+#Alcohol vs. Residual Sugar vs. Quality 
+m3 <- ggplot(data = white_wine_data, aes(x = residual.sugar, y = alcohol, colour = quality ))+
+  geom_point(alpha =1/2)+
+   geom_smooth(method = "lm", se = F, size = .5)+
+  ggtitle('Residual Sugar + Alcohol vs. Quality') + 
+  theme(plot.title=element_text(hjust=0.5)) +
+  scale_color_brewer(type = 'div', palette =  'RdBu')+ theme_dark()+
+  coord_cartesian( xlim = c(0,22), ylim = c(7,14))
+m3
+#From this plot we can see that higher quality wines have higher alcohol content and lower residual sugar. 
+```
+#Multivariate Plot Analysis
+#The above three graphs shows that higher rated wine have density and residual
+#sugar on the lower side and alcohol on the higher as side.
+
+#EDA Conclusion:
+#This EDA consisted of a univariate, bivariate and multivariate investigation of the White Wine dataset, which allowed for a progressive understanding of the data and specifically, the relationship among its variables. 
+#Upon initial inspection, our univariate analysis suggested that a linear model would be appropriate given the approximately normal distributions for all of the dataset's variables. 
+#However, doing our bivariate analysis we discovered several violations of the assumptions of linear models, for some of the dataset's variables. 
+#Moreover, a secondary finding of our bivariate analysis was that there weren't that many strong correlations between our dependent variable, quality, and our various independent variables.
+#Even after conducting a multivariate analysis, it is still difficult to determine meaningful relations. Perhaps one of the reasons is because of the many permutations of variables in the dataset.  
+#The conclusion after our bivariate analysis then is that a linear regression model would not be appropriate and thus we should proceed with logistic models. Moreover, because of the strong correlation that density has with other features in our dataset, including quality, we should run some logistic models that allow us to retain the density variable in our model, despite its multicollinearity violation.
+
+#4. Modelling 
+#4.1 Prepare the dataset
+```{r}
+#Prepare the dataset for modelling 
+#Splitting the dataset into Training and Test Set
+library(caTools) 
+set.seed(7644)
+wine_sampling_vector = sample.split(white_wine_data$quality, SplitRatio = 0.8)
+wine_train = subset(white_wine_data, wine_sampling_vector==TRUE)
+wine_test = subset(white_wine_data, wine_sampling_vector==FALSE)
+table(wine_train$quality) 
+table(wine_test$quality) 
+#The test set contains less observations than the train set. However, they are balanced enough that I can run models which will not be biased. 
+```
+
+#4.2 Ordinal Logistic Regression w/ Density
+#Model 1 & 1A (Two Model Ordinal Logistic Regression): 
+#The first model choice was to deploy a logistic ordinal regression. Due to the violations of the multi-linear assumptions outlined in the Bivariate EDA section, it is not appropriate to use a linear model for this dataset. 
+#However, because the multicollinearity issue is both a violation assumption for linear and logisitic regression, we will perform two separate ordinal logistic regression models. One model will include denisty and one model without. We will also use a multinomial logistic regression model as we can ignore the effect of multicollinearity with this model.
+#The results of the two models will be compared to determine the effect density has on multicollinearity. 
+
+```{r}
+#Model 1(Ordinal Logistic Regression w/Density)
+library(MASS)
+wine_model <- polr(quality ~., data = wine_train, Hess=T) 
+summary(wine_model)
+prop.table(table(white_wine_data$quality)) 
+
+#Baseline Descriptive Feature Summary 
+#The model summary shows we have two intercepts and 3 output classes. Class 2 which responds to good quality wine is by far the most frequent. 
+
+#Key Descriptive Figures for Model 1
+#Model 1 (Ordinal Logistic Regression w/ Density) Training Set Results
+wine_train_predictions <- predict(wine_model, wine_train) 
+mean(wine_train_predictions == wine_train$quality) 
+
+#Confusion Matrix 
+cm1 = table(predicted = wine_train_predictions, actual = wine_train$quality) 
+cm1
+
+#Our model performs better on our training data than our baseline model. This makes sense as it predicts the "good" class (2) very often. 
+#The training set accuracy for our model is 73.09%. 
+
+#Model 1 (Ordinal Logistic Regression w/Density) Testing Set Results
+wine_test_predictions <- predict(wine_model, wine_test) 
+mean(wine_test_predictions == wine_test$quality) 
+
+#Confusion Matrix Test
+cm2 <- table(predicted = wine_test_predictions, actual = wine_test$quality) 
+cm2 
+#Our testing model result is very similar to that of our training test result, as its accuracy is 72.24%. Given the result of both our training and test set it seems as though our model choice is not a particulary good choice. 
+#Thus, we will check if the proportional odds assumption is valid for our model using a brant test. We will also conduct a VIF test on our model to see how multicollinearity is affecting our model. 
+
+#Brant Test 
+library (brant) 
+brant(wine_model) 
+#Multicollinearity Test
+library(car) 
+vif(wine_model)
+
+#As a result, you can see that the multicollinearity assumption is violated by multiple variables in this model in addition, the proportional odds assumption is also violated here as the probability score is higher than our alpha value of 0.05 for several variables. Because the proportional odds assumption is violated we should use a 
+#multinomial logistic regression model to see if the results are better. 
+```
+#4.2.1 Multinomial Logistic Regression Model W/ Density 
+```{r}
+#Multinomial Logistic Regression Model 
+library(nnet)
+wine_model2 <- multinom(quality~., data = wine_train, maxit=1000) 
+summary(wine_model2)
+wine_predictions2 <- predict(wine_model2, wine_test) 
+mean(wine_predictions2 == wine_test$quality) 
+table(predicted = wine_predictions2, actual = wine_test$quality) 
+
+#Now to confirm whether logistic ordinal or multinomial logistic regression including Density is a better fit we will check AIC values.
+AIC(wine_model) 
+AIC(wine_model2) 
+
+#A lower AIC model in the multinomial logistic regression model, suggests that is a better model.  
+#Let's try removing density from the equation to see if both the existing multinomial or ordinal model can be improved by doing so.
+```
+
+#4.2.3 Ordinal Logistic Regression w/o Density 
+```{r}
+#Create Model
+whitewinemodel <- polr(quality~. - density, data = wine_train, Hess=TRUE) 
+whitewinepred <- predict(whitewinemodel, wine_test, type="class")
+table(whitewinepred, wine_test$quality)
+
+
+#Key Descriptive Figures for Model 2
+#Model 2 (Ordinal Logistic Regression w/o Density) Training Set Results
+whitewine_train_predictions <- predict(whitewinemodel, wine_train) 
+mean(whitewine_train_predictions == wine_train$quality) 
+table(predicted = whitewine_train_predictions, actual = wine_train$quality)  
+#Confusion Matrix Test 
+cm2 = table(predicted = whitewine_train_predictions, actual = wine_train$quality) 
+cm2 
+#Our model performs better on our training data than our baseline model. This makes sense as it predicts the "good" class (2) very often. 
+#The training set accuracy for our model is 73.12%. 
+
+#Model 2 (Ordinal Logistic Regression w/o Density) Test Set Results 
+whitewine_test_predictions <- predict(whitewinemodel, wine_test) 
+mean(whitewine_test_predictions == wine_test$quality) 
+
+#Confusion Matrix Test
+cm3 <- table(predicted = whitewine_test_predictions, actual = wine_test$quality) 
+cm3
+#Our testing model result is very similar to that of our training test result, as its accuracy is 71.42%. Given the result of both our training and test set it seems as though our model choice is not a particulary good choice. 
+#Thus, we will check if the proportional odds assumption is valid for our model using a brant test. We will also conduct a VIF test on our model the effect removing density had on multicollinearity for our model. 
+
+#Brant Test 
+library (brant) 
+brant(whitewinemodel) 
+#Multicollinearity Test
+library(car) 
+vif(whitewinemodel)
+
+#As a result, you can see that the multicollinearity assumption is not violated by any variables in this model however, the proportional odds assumption is still violated here as the probability score is lower than our alpha value of 0.05 for several variables. Because the proportional odds assumption is violated we should use a 
+#multinomial logistic regression model to see if the results are better. 
+```
+
+#4.2.3 Multinomial Logistic Regression Model W/ Density 
+```{r}
+#Multinomial Logistic Regression Model w/o Density 
+whitewinemodel2 <- multinom(quality ~ fixed.acidity + volatile.acidity + citric.acid + residual.sugar + chlorides + free.sulfur.dioxide + total.sulfur.dioxide + pH + sulphates + alcohol,data = white_wine_data, maxit=1000) 
+whitewine_predictions2 <- predict(whitewinemodel2, wine_test) 
+mean(whitewine_predictions2 == wine_test$quality) 
+table(predicted = whitewine_predictions2, actual = wine_test$quality)
+
+#The accuracy in our multinomial model resembles the accuracies of all the other models we've run with an accuracy score of 72.44%.
+
+#Now to confirm whether logistic ordinal or multinomial logistic regression is a better fit we will compare and contrast the AIC values across all our models..
+AIC(wine_model) 
+AIC(wine_model2)
+AIC(whitewinemodel) 
+AIC(whitewinemodel2)
+
+#So far the best scoring AIC model is the multinomial model including density. However, let's try some additional models and see if we can get a better AIC score. 
+#Let's see if we can get a better AIC score using Stepwise regression. Stepwise regression is another way to work around the current issue of multicollinearity. 
+```
+
+#4.3 Stepwise Logistic Regression
+```{r}
+#Model 3 Stepwise Logistic Regression 
+ordsteplog = step(wine_model)
+summary(ordsteplog) 
+#Based on stepwise regression model using all variables, we see that 7 variables were deemed significant (pH, free sulfur dioxide, sulphates, residual sugar, total sulfur dioxide, volatile acidity and alcohol. 
+
+head(fitted(ordsteplog))
+
+#Training Set Result 
+ps <- predict(ordsteplog, type="class") 
+head(ps) 
+#Confusion Matrix
+cm3 = as.matrix(table(Actual = wine_train$quality, Predicted = ps))
+cm3
+sum(diag(cm3))/length(wine_train$quality) 
+#The train set accuracy for the training data is 73.02%.
+
+#Test Set Result 
+tst_preds <- predict(ordsteplog, newdata=wine_test, type = "class")
+#Confusion Matrix 
+cm4 <- table(predicted = tst_preds, actual = wine_test$quality) 
+cm4
+sum(diag(cm4))/length(wine_test$quality) 
+#The test set accuracy is 72.04%. 
+
+#Stepwise Logistic Regression Conclusion
+#The AIC for this model is improved compared to our simple ordinal logistic model value. Thus, so far it is the best model. 
+#However, if the Brant test model is further investigated to find out to be significant than we would use this model as the proper odds assumption would be violated and deem the stepwise regression model as invalid. 
+```
+#4.4 Decision Tree Model 
+```{r}
+#Create Decision Tree Model
+library(rpart) 
+dt = rpart(formula = quality ~., data = wine_test, method = "class") 
+summary(dt)
+y_pred = predict (dt, type = "class", newdata = wine_test)
+#Confusion Matrix
+cm_dt = table(predicted= y_pred, actual = wine_test$quality) 
+cm_dt
+#Accuracy
+sum(diag(cm_dt))/length(wine_test$quality) 
+
+#The accuracy for our Decision Tree Model is 77.24%. Thus, it has the highest degree of accuracy across all of the different models we have tested. 
+
+```
